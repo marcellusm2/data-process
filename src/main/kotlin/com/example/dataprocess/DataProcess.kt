@@ -18,7 +18,7 @@ class DataProcess {
 
 	companion object {
 		const val THREAD_POOL_SIZE = 5 // externalizar
-		const val IMS_SKU_LIST_MAX_SIZE = 250 // externalizar
+		const val IMS_SKU_LIST_MAX_SIZE = 200 // externalizar
 	}
 
 	fun processWithFixedThreadPool() = runBlocking {
@@ -71,6 +71,18 @@ class DataProcess {
 			}
 			.collect(Collectors.toList())
 
+//		arrayListOfFulfillmentItems
+//			.groupBy { it.shippingCenter }// agrupando por CD
+//			.entries
+//			.stream()
+//			.forEach { items ->
+//				val itemsWithTheSameSku = items.value.groupBy { it.skuCode }
+////				itemsWithTheSameSku.entries.forEach { println(items.key + "|" + it.key + " - " + it.value.size) }
+////				enviarPacotes(itemsWithTheSameSku)
+//				saveStockSimulation(itemsWithTheSameSku, items.key)
+//			}
+
+
 		// agrupar items por sku sumarizando quantidade e com
 
 //		scStock
@@ -94,21 +106,6 @@ class DataProcess {
 //		println(itMap.key + " - " + scStock.size + " skus")
 //		saveStock(itMap.key, scStock)
 
-//		val aggregationByStateCity: Map<StateCityGroup, TaxEntryAggregation> = taxes.stream().collect(
-//			groupingBy(
-//				{ p -> StateCityGroup(p.getState(), p.getCity()) },
-//				collectingAndThen(Collectors.toList(),
-//					Function<R, RR> { list: R ->
-//						val entries: Int = list.stream().collect(
-//							summingInt(TaxEntrySimple::getNumEntries)
-//						)
-//						val priceAverage: Double = list.stream().collect(
-//							averagingDouble(TaxEntrySimple::getPrice)
-//						)
-//						TaxEntryAggregation(entries, priceAverage)
-//					})
-//			)
-//		)
 	}
 
 	private fun getStockFromIMS(cd: String, skuCodes: Set<String>): List<Stock> {
@@ -145,5 +142,78 @@ class DataProcess {
 	private fun saveSimulationStock(stock: List<SimulationStock>) {
 		println("salvando estoque do ${stock.first().shippingCenter} da simulação ${stock.first().simulationId}")
 		runBlocking { delay(200) }
+	}
+
+//	fun <T> buffer(stream: Stream<T>, count: Long): Stream<List<T>?>? {
+//		val streamIterator: Iterator<T> = stream.iterator()
+//		return StreamSupport.stream(Spliterators.spliteratorUnknownSize(object : Iterator<List<T>?> {
+//			override fun hasNext(): Boolean {
+//				return streamIterator.hasNext()
+//			}
+//
+//			override fun next(): List<T> {
+//				if (!hasNext()) {
+//					throw NoSuchElementException()
+//				}
+//				val intermediate: MutableList<T> = ArrayList()
+//				var v: Long = 0
+//				while (v < count && hasNext()) {
+//					intermediate.add(streamIterator.next())
+//					v++
+//				}
+//				return intermediate
+//			}
+//		}, 0), false)
+//	}
+
+	private fun enviarPacotes(list: Map<String, List<FulfillmentItem>>) {
+		val pacotes = mutableListOf<List<FulfillmentItem>>(mutableListOf())
+		var pacotePosition = 0
+
+		list.forEach {
+			if (it.value.size >= IMS_SKU_LIST_MAX_SIZE) {
+				pacotes.add(it.value)
+				pacotePosition++
+			} else {
+				if (pacotes[pacotePosition].size < IMS_SKU_LIST_MAX_SIZE) {
+					pacotes[pacotePosition] += it.value
+				} else {
+					pacotes.add(it.value)
+					pacotePosition++
+				}
+			}
+		}
+
+		var count = 1
+		pacotes.forEach {
+			println("enviando pacote "+count+"/"+pacotes.size+" com "+it.size+" itens")
+			count++
+		}
+	}
+
+	private fun saveStockSimulation(listCD: Map<String, List<FulfillmentItem>>, cd: String) {
+		listCD.forEach{ skuCd ->
+			var qty = 0
+			skuCd.value.forEach {
+				qty += it.requestQuantity
+			}
+//			stockSimulationService.save(
+//				StockSimulation(
+//					id = null,
+//					simulation = simulation,
+//					shippingCenter = skuCd.value[0].shippingCenter!!,
+//					skuCode = skuCd.key,
+//					availableStock = null,
+//					requestedStock = qty,
+//					lastSync = null
+//				)
+//			)
+		}
+		listCD.forEach { sku ->
+			println(cd + "|" + sku.key + " - " + sku.value.sumOf { it.requestQuantity })
+		}
+		listCD.entries.parallelStream().forEach { sku ->
+			println(sku.value.first().shippingCenter + "|" + sku.key + " - " + sku.value.sumOf { it.requestQuantity })
+		}
 	}
 }
