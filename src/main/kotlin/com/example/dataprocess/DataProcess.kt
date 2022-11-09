@@ -1,6 +1,7 @@
 package com.example.dataprocess
 
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.merge
 import java.util.*
 import java.util.concurrent.Executors
 import java.util.stream.Collectors
@@ -11,7 +12,15 @@ class DataProcess {
 	private val arrayListOfFulfillmentItems: List<FulfillmentItem> = (1..10000).map { FulfillmentItem(
 		it,
 		Random.nextInt(0, 100),
-		Random.nextInt(1000, 9999).toString(),
+		Random.nextInt(1000, 1005).toString(),
+		arrayOf("CD1", "CD2", "CD3", "CD4", "CD5").random(),
+		Date())
+	}
+
+	private val arrayListOfFulfillmentItems2: List<FulfillmentItem> = (1..10000).map { FulfillmentItem(
+		it,
+		Random.nextInt(0, 100),
+		Random.nextInt(2000, 20000).toString(),
 		arrayOf("CD1", "CD2", "CD3", "CD4", "CD5").random(),
 		Date())
 	}
@@ -22,7 +31,12 @@ class DataProcess {
 	}
 
 	fun processWithFixedThreadPool() = runBlocking {
-		arrayListOfFulfillmentItems
+
+		val list = mutableListOf<FulfillmentItem>()
+		arrayListOfFulfillmentItems.forEach{list.add(it)}
+		arrayListOfFulfillmentItems2.forEach{list.add(it)}
+
+		list
 			.groupBy { it.shippingCenter }
 			.entries
 			.parallelStream()
@@ -215,5 +229,47 @@ class DataProcess {
 		listCD.entries.parallelStream().forEach { sku ->
 			println(sku.value.first().shippingCenter + "|" + sku.key + " - " + sku.value.sumOf { it.requestQuantity })
 		}
+	}
+
+	fun process2() = runBlocking {
+
+		val list = mutableListOf<FulfillmentItem>()
+		arrayListOfFulfillmentItems.forEach{list.add(it)}
+		arrayListOfFulfillmentItems2.forEach{list.add(it)}
+
+		list
+			.groupBy { it.shippingCenter }// agrupando por CD
+			.entries
+			.parallelStream()
+			.map { itMap -> //aqui é item de uma lista de sku por cd
+				enviarItensAgrupadosPorSku(itMap.value.groupBy { it.skuCode }) // agrupando SKUs de um CD
+			}
+			.collect(Collectors.toList())
+	}
+
+	private fun enviarItensAgrupadosPorSku(list: Map<String, List<FulfillmentItem>>) {
+
+		val pacotes = mutableListOf<MutableList<FulfillmentItem>>()
+		var pacotePosition = 0
+
+		list.forEach{
+			if (it.value.size >= 200){
+				pacotes.add(it.value.toMutableList())
+				pacotePosition += 1
+			} else {
+				if (pacotes.isEmpty()){
+					pacotes.add(mutableListOf())
+				}
+				if (pacotes[pacotePosition].size < 200){
+					pacotes[pacotePosition]+= it.value
+				} else {
+					pacotes.add(it.value.toMutableList())
+					pacotePosition += 1
+				}
+			}
+		}
+
+		println("ok")
+
 	}
 }

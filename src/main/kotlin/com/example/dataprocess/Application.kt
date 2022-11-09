@@ -16,7 +16,7 @@ fun main() {
 //	println("fixedThreadPool: $time ms")
 
 	val time = measureTimeMillis {
-		DataProcess().process()
+		DataProcess().process2()
 	}
 	println("$time ms")
 
